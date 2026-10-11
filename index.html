@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Hospital Bed | Task 4</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background: #eef3f8;
+  color: #203047;
+}
+main {
+  max-width: 720px;
+  margin: auto;
+}
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  margin: 14px 0;
+  box-shadow: 0 3px 12px #00000010;
+}
+h1 { font-size: 25px; }
+.angle {
+  font-size: 54px;
+  font-weight: bold;
+  text-align: center;
+  margin: 16px;
+}
+input[type=range] { width: 100%; }
+button, select {
+  padding: 12px;
+  margin: 5px 3px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+button { background: #1769aa; color: white; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.preset { background: #087e75; }
+.emergency { background: #c62828; }
+.status { font-weight: bold; }
+.small { color: #65748b; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Intelligent Remote Bed Control</h1>
+  <p class="small">Task 4 · ESP32 + MQTT + Servo</p>
+
+  <section class="card">
+    <h2>Connection</h2>
+    <p id="connection" class="status">Connecting to MQTT...</p>
+    <p>Bed mode: <strong id="mode">Waiting for ESP32</strong></p>
+    <p>Servo angle: <strong id="actual">--</strong>°</p>
+    <p>Target angle: <strong id="target">--</strong>°</p>
+  </section>
+
+  <section class="card">
+    <h2>Manual angle control</h2>
+    <div class="angle"><span id="angleLabel">10</span>°</div>
+    <input id="angleSlider" type="range" min="0" max="90" value="10">
+    <p class="small">Allowed range: 0° to 90°. Changes are applied gradually.</p>
+    <button id="setAngle" onclick="setManual()" disabled>
+      Set bed angle
+    </button>
+  </section>
+
+  <section class="card">
+    <h2>Preset modes</h2>
+    <button class="preset" onclick="send('MODE:SLEEP')">Sleeping · 10°</button>
+    <button class="preset" onclick="send('MODE:BREATHING')">Breathing support · 45°</button>
+    <button class="emergency" onclick="send('MODE:EMERGENCY')">Emergency · 90°</button>
+  </section>
+
+  <section class="card">
+    <h2>Automatic patient-condition mode</h2>
+    <p class="small">
+      Demonstration only: select a simulated condition to test automatic
+      target-angle selection.
+    </p>
+    <button class="preset" onclick="send('CONDITION:NORMAL')">
+      Normal · 10°
+    </button>
+    <button class="preset" onclick="send('CONDITION:LOW_O2')">
+      Low oxygen · 45°
+    </button>
+    <button class="emergency" onclick="send('CONDITION:DISTRESS')">
+      Patient distress · 90°
+    </button>
+    <button onclick="send('AUTO:OFF')">Disable auto mode</button>
+  </section>
+
+  <section class="card">
+    <h2>Activity log</h2>
+    <div id="log">Waiting for events...</div>
+  </section>
+</main>
+
+<script>
+const COMMAND = "elevance/harshini/task4/bed/command";
+const STATUS  = "elevance/harshini/task4/bed/status";
+
+const connection = document.getElementById("connection");
+const slider = document.getElementById("angleSlider");
+const angleLabel = document.getElementById("angleLabel");
+const setButton = document.getElementById("setAngle");
+const logBox = document.getElementById("log");
+
+function log(message) {
+  const line = document.createElement("p");
+  line.textContent = new Date().toLocaleTimeString() + " — " + message;
+  logBox.prepend(line);
+  while (logBox.children.length > 8) {
+    logBox.removeChild(logBox.lastChild);
+  }
+}
+
+slider.addEventListener("input", () => {
+  angleLabel.textContent = slider.value;
+});
+
+const client = mqtt.connect("wss://test.mosquitto.org:8081/mqtt", {
+  clientId: "bed_dashboard_" +
+    Math.random().toString(16).slice(2, 10),
+  connectTimeout: 10000,
+  reconnectPeriod: 3000,
+  clean: true
+});
+
+client.on("connect", () => {
+  connection.textContent = "MQTT connected";
+  connection.style.color = "green";
+  setButton.disabled = false;
+  client.subscribe(STATUS);
+  log("Dashboard connected to MQTT.");
+});
+
+client.on("reconnect", () => {
+  connection.textContent = "Reconnecting...";
+});
+
+client.on("error", (err) => {
+  connection.textContent = "MQTT connection error";
+  console.error(err);
+});
+
+client.on("offline", () => {
+  connection.textContent = "Offline — retrying";
+  setButton.disabled = true;
+});
+
+function send(command) {
+  if (!client.connected) {
+    alert("Dashboard is not connected to MQTT yet.");
+    return;
+  }
+
+  client.publish(COMMAND, command, { qos: 0 });
+  log("Command sent: " + command);
+}
+
+function setManual() {
+  const angle = Math.max(0, Math.min(90, Number(slider.value)));
+  send("ANGLE:" + angle);
+}
+
+client.on("message", (topic, payload) => {
+  const message = payload.toString();
+  const fields = {};
+
+  message.split(";").forEach(part => {
+    const split = part.indexOf(":");
+    if (split > 0) {
+      fields[part.slice(0, split)] = part.slice(split + 1);
+    }
+  });
+
+  if (fields.ANGLE !== undefined) {
+    document.getElementById("actual").textContent = fields.ANGLE;
+    document.getElementById("target").textContent = fields.TARGET;
+    document.getElementById("mode").textContent =
+      fields.MODE + " · Auto: " + fields.AUTO;
+  }
+});
+</script>
+</body>
+</html>
