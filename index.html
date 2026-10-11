@@ -1,10 +1,10 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Intelligent Remote Bed Control</title>
-
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <style>
@@ -81,11 +81,6 @@ button {
 
 button:hover { opacity: .86; }
 
-button:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-}
-
 input[type=range] { width: 100%; }
 
 input[type=number] {
@@ -93,7 +88,6 @@ input[type=number] {
   padding: 9px;
 }
 
-.primary { background: #1769aa; }
 .green { background: #16834a; }
 .orange { background: #c66a0a; }
 .red { background: #c62828; }
@@ -119,6 +113,7 @@ input[type=number] {
   font-family: monospace;
   font-size: 13px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .note {
@@ -138,105 +133,75 @@ footer {
 <body>
 <header>
   <h1>Intelligent Remote Bed Control</h1>
-  <p>Task 4 · ESP32 + MQTT + Servo</p>
+  <p>Task 4 · ESP32 + MQTT + Servo Motor</p>
 </header>
 
 <main>
   <section class="card">
     <h2>Connection</h2>
     <span class="status" id="connection">Connecting to MQTT...</span>
-    <p class="note">
-      The dashboard communicates with the ESP32 through MQTT.
-      Start the Wokwi simulation to control the servo.
+    <p class="note" id="connectionInfo">
+      Start your Wokwi ESP32 simulation. The dashboard connects through MQTT.
     </p>
   </section>
 
   <section class="card">
     <h2>Live Bed Status</h2>
     <div class="grid">
-      <div class="metric">
-        <span>Bed mode</span>
-        <strong id="mode">Waiting for ESP32</strong>
-      </div>
-      <div class="metric">
-        <span>Servo angle</span>
-        <strong id="angle">--°</strong>
-      </div>
-      <div class="metric">
-        <span>Target angle</span>
-        <strong id="target">--°</strong>
-      </div>
-      <div class="metric">
-        <span>Automatic mode</span>
-        <strong id="autoStatus">OFF</strong>
-      </div>
+      <div class="metric"><span>Bed mode</span><strong id="mode">Waiting for ESP32</strong></div>
+      <div class="metric"><span>Servo angle</span><strong id="angle">--°</strong></div>
+      <div class="metric"><span>Target angle</span><strong id="target">--°</strong></div>
+      <div class="metric"><span>Automatic mode</span><strong id="autoStatus">OFF</strong></div>
     </div>
   </section>
 
   <section class="card">
-    <h2>Manual angle control</h2>
+    <h2>Manual Angle Control</h2>
     <p>Selected angle: <strong id="selected">10°</strong></p>
     <input id="slider" type="range" min="0" max="90" value="10">
-    <p class="note">Allowed range: 0° to 90°. Changes are applied gradually.</p>
+    <p class="note">Allowed angle: 0°–90°.</p>
     <label for="angleInput">Set bed angle </label>
     <input id="angleInput" type="number" min="0" max="90" value="10">
-    <button onclick="sendManual()" class="primary">Set angle</button>
+    <button onclick="sendManual()">Set angle</button>
   </section>
 
   <section class="card">
-    <h2>Preset modes</h2>
-    <button class="green" onclick="sendCommand('MODE:SLEEP')">
-      Sleeping · 10°
-    </button>
-    <button class="orange" onclick="sendCommand('MODE:BREATHING')">
-      Breathing support · 45°
-    </button>
-    <button class="red" onclick="sendCommand('MODE:EMERGENCY')">
-      Emergency · 90°
-    </button>
+    <h2>Preset Modes</h2>
+    <button class="green" onclick="sendCommand('MODE:SLEEP')">Sleeping · 10°</button>
+    <button class="orange" onclick="sendCommand('MODE:BREATHING')">Breathing Support · 45°</button>
+    <button class="red" onclick="sendCommand('MODE:EMERGENCY')">Emergency · 90°</button>
   </section>
 
   <section class="card">
-    <h2>Automatic patient-condition mode</h2>
-    <p class="note">
-      Demonstration only: select a simulated condition to test
-      automatic target-angle selection.
-    </p>
-    <button class="green" onclick="enableAuto('NORMAL')">
-      Normal · 10°
-    </button>
-    <button class="orange" onclick="enableAuto('LOW_O2')">
-      Low oxygen · 45°
-    </button>
-    <button class="red" onclick="enableAuto('DISTRESS')">
-      Patient distress · 90°
-    </button>
-    <button class="gray" onclick="sendCommand('AUTO:OFF')">
-      Disable auto mode
-    </button>
+    <h2>Automatic Patient-Condition Mode</h2>
+    <p class="note">Demonstration only. These controls simulate patient conditions.</p>
+    <button class="green" onclick="enableAuto('NORMAL')">Normal · 10°</button>
+    <button class="orange" onclick="enableAuto('LOW_O2')">Low Oxygen · 45°</button>
+    <button class="red" onclick="enableAuto('DISTRESS')">Patient Distress · 90°</button>
+    <button class="gray" onclick="sendCommand('AUTO:OFF')">Disable Auto Mode</button>
   </section>
 
   <section class="card">
-    <h2>Activity log</h2>
+    <h2>Activity Log</h2>
     <div id="log">Waiting for events...</div>
-    <button class="gray" onclick="clearLog()">Clear log</button>
+    <button class="gray" onclick="clearLog()">Clear Log</button>
   </section>
 </main>
 
-<footer>
-  Intelligent Remote Bed Control · ESP32 and MQTT demonstration
-</footer>
+<footer>Intelligent Remote Bed Control · ESP32 and MQTT demonstration</footer>
 
 <script>
-const broker = "wss://test.mosquitto.org:8081/mqtt";
+const broker = "wss://test.mosquitto.org:8081";
 const commandTopic = "elevance/harshini/task4/bed/command";
 const statusTopic = "elevance/harshini/task4/bed/status";
 
 const connectionLabel = document.getElementById("connection");
+const connectionInfo = document.getElementById("connectionInfo");
 const logBox = document.getElementById("log");
 
 function addLog(message) {
   const time = new Date().toLocaleTimeString();
+
   if (logBox.textContent === "Waiting for events...") {
     logBox.textContent = "";
   }
@@ -249,118 +214,135 @@ function clearLog() {
   logBox.textContent = "Waiting for events...";
 }
 
-const client = mqtt.connect(broker, {
-  clientId: "bed_dashboard_" +
-    Math.random().toString(16).slice(2, 10),
-  clean: true,
-  connectTimeout: 10000,
-  reconnectPeriod: 3000
-});
-
-client.on("connect", function() {
-  connectionLabel.textContent = "MQTT connected";
-  connectionLabel.style.background = "#d8f5e3";
-  connectionLabel.style.color = "#17643a";
-
-  client.subscribe(statusTopic, function(error) {
-    if (error) {
-      addLog("Status subscription failed: " + error.message);
-    } else {
-      addLog("Subscribed to ESP32 status topic.");
-    }
-  });
-
-  addLog("Dashboard connected to MQTT.");
-});
-
-client.on("reconnect", function() {
-  connectionLabel.textContent = "Reconnecting...";
-});
-
-client.on("offline", function() {
-  connectionLabel.textContent = "MQTT offline";
-  connectionLabel.style.background = "#ffe0e0";
-  connectionLabel.style.color = "#8b1c1c";
-});
-
-client.on("error", function(error) {
-  addLog("MQTT error: " + error.message);
-});
-
-client.on("message", function(topic, payload) {
-  const message = payload.toString();
-  addLog("ESP32 status: " + message);
-
-  const fields = {};
-
-  message.split(";").forEach(function(part) {
-    const separator = part.indexOf(":");
-    if (separator !== -1) {
-      const key = part.substring(0, separator).trim();
-      const value = part.substring(separator + 1).trim();
-      fields[key] = value;
-    }
-  });
-
-  if (fields.ANGLE !== undefined) {
-    document.getElementById("angle").textContent =
-      fields.ANGLE + "°";
-  }
-
-  if (fields.TARGET !== undefined) {
-    document.getElementById("target").textContent =
-      fields.TARGET + "°";
-  }
-
-  if (fields.MODE !== undefined) {
-    document.getElementById("mode").textContent = fields.MODE;
-  }
-
-  if (fields.AUTO !== undefined) {
-    document.getElementById("autoStatus").textContent = fields.AUTO;
-  }
-
-  if (fields.ANGLE !== undefined) {
-    document.getElementById("slider").value = fields.TARGET || fields.ANGLE;
-    document.getElementById("selected").textContent =
-      document.getElementById("slider").value + "°";
-    document.getElementById("angleInput").value =
-      document.getElementById("slider").value;
-  }
-});
-
-function sendCommand(command) {
-  if (!client.connected) {
-    addLog("Cannot send command: MQTT is disconnected.");
-    return;
-  }
-
-  client.publish(commandTopic, command, { qos: 0, retain: false });
-  addLog("Command sent: " + command);
+function setConnection(text, color, textColor) {
+  connectionLabel.textContent = text;
+  connectionLabel.style.background = color;
+  connectionLabel.style.color = textColor;
 }
 
-function sendManual() {
+if (typeof mqtt === "undefined") {
+  setConnection("MQTT library failed to load", "#ffe0e0", "#8b1c1c");
+  connectionInfo.textContent =
+    "The MQTT JavaScript library could not load. Check your internet connection and refresh.";
+} else {
+  const client = mqtt.connect(broker, {
+    clientId: "bed_dashboard_" + Math.random().toString(16).slice(2, 10),
+    clean: true,
+    connectTimeout: 15000,
+    reconnectPeriod: 5000,
+    keepalive: 30
+  });
+
+  client.on("connect", function() {
+    setConnection("MQTT connected", "#d8f5e3", "#17643a");
+    connectionInfo.textContent =
+      "Connected to the MQTT broker. Start Wokwi to receive ESP32 status.";
+
+    addLog("Connected to MQTT broker.");
+
+    client.subscribe(statusTopic, function(error) {
+      if (error) {
+        addLog("Subscription failed: " + error.message);
+      } else {
+        addLog("Subscribed to: " + statusTopic);
+      }
+    });
+  });
+
+  client.on("reconnect", function() {
+    setConnection("Reconnecting...", "#fff0c2", "#7c5100");
+    connectionInfo.textContent =
+      "Trying to reconnect to the MQTT broker. Check the WebSocket URL and network.";
+  });
+
+  client.on("offline", function() {
+    setConnection("MQTT offline", "#ffe0e0", "#8b1c1c");
+    addLog("MQTT client is offline.");
+  });
+
+  client.on("close", function() {
+    addLog("MQTT connection closed.");
+  });
+
+  client.on("error", function(error) {
+    setConnection("MQTT connection error", "#ffe0e0", "#8b1c1c");
+    addLog("MQTT error: " + (error.message || "Unknown error"));
+  });
+
+  client.on("message", function(topic, payload) {
+    const message = payload.toString();
+    addLog("ESP32 status: " + message);
+
+    const fields = {};
+
+    message.split(";").forEach(function(part) {
+      const separator = part.indexOf(":");
+
+      if (separator !== -1) {
+        fields[part.substring(0, separator).trim().toUpperCase()] =
+          part.substring(separator + 1).trim();
+      }
+    });
+
+    if (fields.ANGLE !== undefined) {
+      document.getElementById("angle").textContent = fields.ANGLE + "°";
+    }
+
+    if (fields.TARGET !== undefined) {
+      document.getElementById("target").textContent = fields.TARGET + "°";
+    }
+
+    if (fields.MODE !== undefined) {
+      document.getElementById("mode").textContent = fields.MODE;
+    }
+
+    if (fields.AUTO !== undefined) {
+      document.getElementById("autoStatus").textContent = fields.AUTO;
+    }
+
+    if (fields.ANGLE !== undefined || fields.TARGET !== undefined) {
+      const shownAngle = Number(fields.TARGET ?? fields.ANGLE);
+
+      if (Number.isFinite(shownAngle)) {
+        document.getElementById("slider").value = shownAngle;
+        document.getElementById("selected").textContent = shownAngle + "°";
+        document.getElementById("angleInput").value = shownAngle;
+      }
+    }
+  });
+
+  window.sendCommand = function(command) {
+    if (!client.connected) {
+      addLog("Command not sent: MQTT is disconnected.");
+      return;
+    }
+
+    client.publish(commandTopic, command, { qos: 0, retain: false }, function(error) {
+      if (error) {
+        addLog("Publish failed: " + error.message);
+      } else {
+        addLog("Command sent: " + command);
+      }
+    });
+  };
+}
+
+window.sendManual = function() {
   const input = document.getElementById("angleInput");
   const angle = Number(input.value);
 
-  if (!Number.isFinite(angle) || angle < 0 ||
-      angle > 90 || input.value.trim() === "") {
+  if (input.value.trim() === "" || !Number.isFinite(angle) || angle < 0 || angle > 90) {
     alert("Enter an angle between 0 and 90 degrees.");
     return;
   }
 
   sendCommand("ANGLE:" + Math.round(angle));
-}
+};
 
-function enableAuto(condition) {
-  if (!client.connected) {
-    addLog("Cannot enable auto mode: MQTT is disconnected.");
-    return;
-  }
-
+window.enableAuto = function(condition) {
   sendCommand("AUTO:ON");
   sendCommand("CONDITION:" + condition);
-}
+};
 
 document.getElementById("slider").addEventListener("input", function() {
   document.getElementById("selected").textContent = this.value + "°";
@@ -370,9 +352,9 @@ document.getElementById("slider").addEventListener("input", function() {
 document.getElementById("angleInput").addEventListener("change", function() {
   let value = Number(this.value);
 
-  if (!Number.isFinite(value)) value = 10;
-  value = Math.max(0, Math.min(90, value));
+  if (this.value.trim() === "" || !Number.isFinite(value)) value = 10;
 
+  value = Math.max(0, Math.min(90, value));
   this.value = value;
   document.getElementById("slider").value = value;
   document.getElementById("selected").textContent = value + "°";
@@ -380,3 +362,4 @@ document.getElementById("angleInput").addEventListener("change", function() {
 </script>
 </body>
 </html>
+```
